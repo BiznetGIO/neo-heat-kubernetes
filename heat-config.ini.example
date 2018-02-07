@@ -1,8 +1,8 @@
 [global]
 auth-url=https://keystone.wjv-1.neo.id:443/v3
-username=test@biznetgio.com
-password=BiznetGio2017
-tenant-id=c8b7b8ee391d40e0a8aef3b5b2860788
+username=
+password=
+tenant-id=
 #tenant-name=k8s-autoscale
 domain-id=neo.id
 domain-name=neo.id
