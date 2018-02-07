@@ -1,0 +1,47 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: cluster-autoscaler
+  labels:
+    app: cluster-autoscaler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-autoscaler
+  template:
+    metadata:
+      labels:
+        app: cluster-autoscaler
+    spec:
+      hostNetwork: true
+      containers:
+        - image: taimir93/cluster-autoscaler:v0.1
+          name: cluster-autoscaler
+          resources:
+            limits:
+              cpu: 100m
+              memory: 300Mi
+            requests:
+              cpu: 100m
+              memory: 300Mi
+          command:
+            - ./cluster-autoscaler
+            - --v=4
+            - --cloud-provider=openstack-heat
+            - --cloud-config=/home/k8s/heat-config.ini
+            - --nodes=1:10:node_cluster:autoscale:cluster_size
+            - --scale-down-delay=5s
+            - --leader-elect=false
+          env:
+            - name: OS_REGION_NAME
+              value: RegionOne
+          imagePullPolicy: "Always"
+          volumeMounts:
+          - name: config
+            mountPath: /home/k8s
+      volumes:
+        - name: config
+          hostPath:
+            path: /home/k8s
