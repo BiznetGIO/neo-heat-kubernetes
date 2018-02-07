@@ -1,0 +1,328 @@
+heat_template_version: 2016-10-14
+
+description: Template that installs a k8s cluster resource group and a master node.
+
+#####################################
+# PARAMETERS
+#####################################
+parameters:
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for server. Please use an Centos based image.
+    default: 16f795e6-aa68-4b49-a318-d6de8d1bd8aa
+  controller_flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used on the compute instance.
+    default: SS2.1
+  master_flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used on the compute instance.
+    default: SM4.4
+  worker_flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used on the compute instance.
+    default: SM4.4
+  key:
+    type: string
+    label: Key name
+    description: Name of key-pair to be installed on the compute instance.
+    default: k8s-autoscale
+  public_network:
+    type: string
+    label: Public network name or ID
+    description: Public network to attach server to.
+    default: Public_Network
+  cluster_size:
+    type: number
+    label: Cluster size
+    description: Number of instances in cluster.
+    default: 3
+  master_size:
+    type: number
+    label: Cluster master size
+    description: Number of instances in cluster.
+    default: 1
+  worker_size:
+    type: number
+    label: Cluster worker size
+    description: Number of instances in cluster.
+    default: 3
+  timeout:
+    type: number
+    description: Timeout for WaitCondition, depends on your image and environment
+    default: 300
+#####################################
+# RESOURCES
+#####################################
+resources:
+  # USERS
+  k8s_user:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: "k8s-user.yaml"}
+  # PRIVATE KEY
+  generated_key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: {get_param: key}
+      save_private_key: True
+  #NETWORKS
+  private_network:
+    type: OS::Neutron::Net
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_network }
+      cidr: 10.7.0.0/24
+      dns_nameservers: [8.8.8.8, 8.8.4.4]
+      gateway_ip: 10.7.0.1
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: public_network }
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: private_subnet }
+
+  secgroup_autoscale:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        - protocol: icmp
+        - protocol: udp
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+        - protocol: tcp
+          port_range_min: 443
+          port_range_max: 443
+        - remote_mode: remote_group_id
+
+  # PROVISIONING
+  provision_instance:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: |
+        #!/bin/bash
+        sudo yum install -y epel-release
+        sudo yum install -y python2-pip git expect python-netaddr
+        sudo pip install ansible
+
+  provision_controller:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: |
+        #!/bin/bash
+        git clone https://github.com/kubernetes-incubator/kubespray.git /home/k8s/.deploy
+        sudo chown k8s:k8s /home/k8s/.deploy -R
+
+  # PRIVATE KEY
+  install_private_key:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          template: |
+            #!/bin/bash
+            echo "$key" >/home/k8s/.ssh/id_rsa
+            chown k8s.k8s /home/k8s/.ssh/id_rsa
+            chmod 0400 /home/k8s/.ssh/id_rsa
+          params:
+            $key: { get_attr: [generated_key_pair, private_key] }
+
+  # MASTER NODES
+  install_master:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: {get_resource: k8s_user}
+        - config: {get_resource: provision_instance}
+
+  master_cluster:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: master_size }
+      resource_def:
+        type: master.yaml
+        properties:
+          private_network: {get_resource: private_network}
+          private_subnet: {get_resource: private_subnet}
+          #public_network: {get_param: public_network}
+          secgroup_autoscale: {get_resource: secgroup_autoscale}
+          install_master: {get_resource: install_master}
+          image: {get_param: image}
+          flavor: {get_param: master_flavor}
+          key: {get_param: key}
+  
+
+  # MINION NODES
+  install_minion:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: {get_resource: k8s_user}
+        - config: {get_resource: provision_instance}
+
+  node_cluster:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: worker_size }
+      resource_def:
+        type: minion.yaml
+        properties:
+          private_network: {get_resource: private_network}
+          private_subnet: {get_resource: private_subnet}
+          #public_network: {get_param: public_network}
+          secgroup_autoscale: {get_resource: secgroup_autoscale}
+          install_minion: {get_resource: install_minion}
+          image: {get_param: image}
+          flavor: {get_param: worker_flavor}
+          key: {get_param: key}
+
+  # CONTROLLER
+  install_controller:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: {get_resource: k8s_user}
+        - config: {get_resource: provision_instance}
+        - config: {get_resource: install_private_key}
+        - config: {get_resource: provision_controller}
+        - config:
+            str_replace:
+              template: |
+                #!/bin/bash
+                cd /home/k8s/.deploy
+                INV="inventory/inventory.cfg"
+                KUBECONFIG="/home/k8s/.kube"
+                NODEIDS=($(echo $node_ids | tr -d '[],'))
+                NODEIPS=($(echo $node_ips | tr -d '[],'))
+                MASTERIDS=($(echo $master_ids | tr -d '[],'))
+                MASTERIPS=($(echo $master_ips | tr -d '[],'))
+                INDEX=0
+                echo "[all]" > $INV
+                for nodeid in ${NODEIDS[@]}
+                do
+                  echo "$nodeid    ansible_host=${NODEIPS[$INDEX]} ip=${NODEIPS[$INDEX]}" >> $INV
+                  let "INDEX++"
+                done
+                INDEX=0
+                for nodeid in ${MASTERIDS[@]}
+                do
+                  echo "$nodeid    ansible_host=${MASTERIPS[$INDEX]} ip=${MASTERIPS[$INDEX]}" >> $INV
+                done
+                echo "" >> $INV
+                echo "[kube-master]" >> $INV
+                INDEX=0
+                for nodeid in ${MASTERIDS[@]}
+                do
+                  echo "$nodeid" >> $INV
+                  let "INDEX++"
+                done
+                echo "" >> $INV
+                echo "[kube-node]" >> $INV
+                INDEX=0
+                for nodeid in ${NODEIDS[@]}
+                do
+                  echo "$nodeid" >> $INV
+                  let "INDEX++"
+                done
+                echo "" >> $INV
+                echo "[etcd]" >> $INV
+
+                if [ ${#MASTERIDS[@]} -gt 2 ]
+                then
+                  # INDEX=0
+                  # for nodeid in ${MASTERIDS[@]}
+                  # do
+                  #   echo "$nodeid" >> $INV
+                  #   let "INDEX++"
+                  # done
+                  echo ${MASTERIDS[0]} >> $INV
+                  echo ${MASTERIDS[1]} >> $INV
+                  echo ${MASTERIDS[2]} >> $INV
+                else 
+                  echo ${MASTERIDS[0]} >> $INV
+                fi
+
+                echo "" >> $INV
+                cat >> $INV << EOF
+                [k8s-cluster:children]
+                kube-node
+                kube-master
+                EOF
+                chown k8s:k8s $INV
+                echo "kubeconfig_localhost: true" >> /home/k8s/.deploy/inventory/group_vars/k8s-cluster.yml
+                echo "kubectl_localhost: true" >> /home/k8s/.deploy/inventory/group_vars/k8s-cluster.yml
+                
+                cat << EOF >> /home/k8s/.deploy/scale.yml
+
+                - hosts: kube-master
+                  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+                  roles:
+                    - { role: kubernetes/client, tags: client }
+                EOF
+                chown k8s:k8s /home/k8s/.deploy/scale.yml
+                su -c "cd /home/k8s/.deploy;export ANSIBLE_FORCE_COLOR=true;ansible-playbook -i $INV /home/k8s/.deploy/scale.yml -b -v >> /tmp/deploy.log" - k8s
+                mkdir -p $KUBECONFIG
+                cp artifacts/admin.conf $KUBECONFIG/config
+                cp artifacts/kubectl /bin
+                chmod +x /bin/kubectl
+                chown k8s:k8s $KUBECONFIG -R
+              params:
+                $node_ids: {get_attr: [node_cluster, server_id]}
+                $node_ips: {get_attr: [node_cluster, server_ip]}
+                $master_ids: {get_attr: [master_cluster, server_id]}
+                $master_ips: {get_attr: [master_cluster, server_ip]}
+  controller:
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: image}
+      flavor: {get_param: controller_flavor}
+      key_name: {get_resource: generated_key_pair}
+      user_data_format: RAW
+      user_data: {get_resource: install_controller}
+      networks:
+        - port: {get_resource: controller_eth0}
+
+  controller_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_resource: private_network}
+      security_groups:
+        - {get_resource: secgroup_autoscale}
+      fixed_ips:
+        - subnet: {get_resource: private_subnet}
+
+  controller_floating:
+      type: OS::Neutron::FloatingIP
+      properties:
+        floating_network: {get_param: public_network}
+        port_id: {get_resource: controller_eth0}
+
+outputs:
+  private_key:
+    description: Private key
+    value: { get_attr: [ generated_key_pair, private_key ] }
+  node_ids:
+    value: {get_attr: [node_cluster, server_id]}
+  node_ips:
+    value: {get_attr: [node_cluster, server_ip]}
+  master_ids:
+    value: {get_attr: [master_cluster, server_id]}
+  master_ips:
+    value: {get_attr: [master_cluster, server_ip]}
