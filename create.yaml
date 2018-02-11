@@ -26,11 +26,6 @@ parameters:
     label: Flavor
     description: Type of instance (flavor) to be used on the compute instance.
     default: SM4.4
-  key:
-    type: string
-    label: Key name
-    description: Name of key-pair to be installed on the compute instance.
-    default: k8s-autoscale
   public_network:
     type: string
     label: Public network name or ID
@@ -59,6 +54,11 @@ parameters:
 # RESOURCES
 #####################################
 resources:
+  # String Generator
+  name_generator:
+    type: OS::Heat::RandomString
+    properties:
+      length: 4
   # USERS
   k8s_user:
     type: OS::Heat::SoftwareConfig
@@ -69,7 +69,8 @@ resources:
   generated_key_pair:
     type: OS::Nova::KeyPair
     properties:
-      name: {get_param: key}
+      name: 
+        list_join: [-, [{ get_param: 'OS::stack_name' },neo,key, {get_resource: name_generator}]]
       save_private_key: True
   #NETWORKS
   private_network:
@@ -166,7 +167,8 @@ resources:
           install_master: {get_resource: install_master}
           image: {get_param: image}
           flavor: {get_param: master_flavor}
-          key: {get_param: key}
+          key: {get_resource: generated_key_pair}
+          stack_name: { get_param: 'OS::stack_name' }
   
 
   # MINION NODES
@@ -191,7 +193,8 @@ resources:
           install_minion: {get_resource: install_minion}
           image: {get_param: image}
           flavor: {get_param: worker_flavor}
-          key: {get_param: key}
+          key: {get_resource: generated_key_pair}
+          stack_name: { get_param: 'OS::stack_name' }
 
   # CONTROLLER
   install_controller:

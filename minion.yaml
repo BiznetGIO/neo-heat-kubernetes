@@ -21,6 +21,8 @@ parameters:
     type: string
   key:
     type: string
+  stack_name:
+    type: string
 
 
 resources:
@@ -36,7 +38,7 @@ resources:
       flavor: {get_param: flavor}
       key_name: {get_param: key}
       name:
-        list_join: [-, [neo,worker, {get_resource: server_name_post_fix}]]
+        list_join: [-, [{ get_param: stack_name },neo,worker, {get_resource: server_name_post_fix}]]
       #personality: {"/home/k8s/heat-config.ini": {get_file: "heat-config.ini"}}
       user_data_format: RAW
       user_data: {get_param: install_minion}
