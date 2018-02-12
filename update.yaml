@@ -318,6 +318,9 @@ resources:
         port_id: {get_resource: controller_eth0}
 
 outputs:
+  controller:
+    description: Controller IP
+    value: {get_attr: [controller_eth0, fixed_ips, 0, ip_address]}
   private_key:
     description: Private key
     value: { get_attr: [ generated_key_pair, private_key ] }
