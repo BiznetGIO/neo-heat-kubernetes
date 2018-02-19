@@ -18,38 +18,26 @@ parameters:
     default: SS2.1
   master_flavor:
     type: string
-    label: Flavor
+    label: Master Flavor
     description: Type of instance (flavor) to be used on the compute instance.
-    default: SM4.4
   worker_flavor:
     type: string
-    label: Flavor
+    label: Worker Flavor
     description: Type of instance (flavor) to be used on the compute instance.
-    default: SM4.4
   public_network:
     type: string
     label: Public network name or ID
     description: Public network to attach server to.
     default: Public_Network
-  cluster_size:
-    type: number
-    label: Cluster size
-    description: Number of instances in cluster.
-    default: 3
   master_size:
     type: number
     label: Cluster master size
     description: Number of instances in cluster.
-    default: 1
   worker_size:
     type: number
     label: Cluster worker size
     description: Number of instances in cluster.
-    default: 3
-  timeout:
-    type: number
-    description: Timeout for WaitCondition, depends on your image and environment
-    default: 300
+
 #####################################
 # RESOURCES
 #####################################
