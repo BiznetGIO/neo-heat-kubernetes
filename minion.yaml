@@ -6,8 +6,8 @@ parameters:
   # network params
   private_network:
     type: string
-  private_subnet:
-    type: string
+  # private_subnet:
+  #   type: string
   # public_network:
   #   type: string
   secgroup_autoscale:
@@ -48,11 +48,10 @@ resources:
   kube_minion_eth0:
     type: OS::Neutron::Port
     properties:
-      network: {get_param: private_network}
+      admin_state_up: true
+      network_id: {get_param: private_network}
       security_groups:
         - {get_param: secgroup_autoscale}
-      fixed_ips:
-        - subnet: {get_param: private_subnet}
 
   # kube_minion_floating:
   #   type: OS::Neutron::FloatingIP

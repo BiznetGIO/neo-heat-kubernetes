@@ -24,11 +24,6 @@ parameters:
     type: string
     label: Worker Flavor
     description: Type of instance (flavor) to be used on the compute instance.
-  public_network:
-    type: string
-    label: Public network name or ID
-    description: Public network to attach server to.
-    default: Public_Network
   master_size:
     type: number
     label: Cluster master size
@@ -37,7 +32,15 @@ parameters:
     type: number
     label: Cluster worker size
     description: Number of instances in cluster.
-
+  private_network:
+    type: string
+    label: Private Network
+    description: Setup Private network
+  public_network:
+    type: string
+    label: Public network name or ID
+    description: Public network to attach server to.
+    default: Public_Network
 #####################################
 # RESOURCES
 #####################################
@@ -57,32 +60,9 @@ resources:
   generated_key_pair:
     type: OS::Nova::KeyPair
     properties:
-      name: 
+      name:
         list_join: [-, [{ get_param: 'OS::stack_name' },neo,key, {get_resource: name_generator}]]
       save_private_key: True
-  #NETWORKS
-  private_network:
-    type: OS::Neutron::Net
-
-  private_subnet:
-    type: OS::Neutron::Subnet
-    properties:
-      network_id: { get_resource: private_network }
-      cidr: 10.7.0.0/24
-      dns_nameservers: [8.8.8.8, 8.8.4.4]
-      gateway_ip: 10.7.0.1
-
-  router:
-    type: OS::Neutron::Router
-    properties:
-      external_gateway_info:
-        network: { get_param: public_network }
-
-  router_interface:
-    type: OS::Neutron::RouterInterface
-    properties:
-      router_id: { get_resource: router }
-      subnet: { get_resource: private_subnet }
 
   secgroup_autoscale:
     type: OS::Neutron::SecurityGroup
@@ -157,7 +137,7 @@ resources:
           flavor: {get_param: master_flavor}
           key: {get_resource: generated_key_pair}
           stack_name: { get_param: 'OS::stack_name' }
-  
+
 
   # MINION NODES
   install_minion:
@@ -198,7 +178,8 @@ resources:
               template: |
                 #!/bin/bash
                 cd /home/k8s/.deploy
-                INV="inventory/inventory.cfg"
+                cp -rfp inventory/sample inventory/neo
+                INV="inventory/neo/inventory.cfg"
                 KUBECONFIG="/home/k8s/.kube"
                 NODEIDS=($(echo $node_ids | tr -d '[],'))
                 NODEIPS=($(echo $node_ips | tr -d '[],'))
@@ -233,6 +214,14 @@ resources:
                   let "INDEX++"
                 done
                 echo "" >> $INV
+                echo "[kube-ingress]" >> $INV
+                INDEX=0
+                for nodeid in ${NODEIDS[@]}
+                do
+                  echo "$nodeid" >> $INV
+                  let "INDEX++"
+                done
+                echo "" >> $INV
                 echo "[etcd]" >> $INV
 
                 if [ ${#MASTERIDS[@]} -gt 2 ]
@@ -246,7 +235,7 @@ resources:
                   echo ${MASTERIDS[0]} >> $INV
                   echo ${MASTERIDS[1]} >> $INV
                   echo ${MASTERIDS[2]} >> $INV
-                else 
+                else
                   echo ${MASTERIDS[0]} >> $INV
                 fi
 
@@ -257,9 +246,9 @@ resources:
                 kube-master
                 EOF
                 chown k8s:k8s $INV
-                echo "kubeconfig_localhost: true" >> /home/k8s/.deploy/inventory/group_vars/k8s-cluster.yml
-                echo "kubectl_localhost: true" >> /home/k8s/.deploy/inventory/group_vars/k8s-cluster.yml
-                
+                echo "kubeconfig_localhost: true" >> /home/k8s/.deploy/inventory/neo/group_vars/k8s-cluster.yml
+                echo "kubectl_localhost: true" >> /home/k8s/.deploy/inventory/neo/group_vars/k8s-cluster.yml
+
                 cat << EOF >> /home/k8s/.deploy/scale.yml
 
                 - hosts: kube-master
@@ -293,11 +282,10 @@ resources:
   controller_eth0:
     type: OS::Neutron::Port
     properties:
-      network: {get_resource: private_network}
+      admin_state_up: true
+      network_id: {get_param: private_network}
       security_groups:
         - {get_resource: secgroup_autoscale}
-      fixed_ips:
-        - subnet: {get_resource: private_subnet}
 
   controller_floating:
       type: OS::Neutron::FloatingIP
