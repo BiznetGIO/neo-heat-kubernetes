@@ -311,3 +311,5 @@ outputs:
     value: {get_attr: [master_cluster, server_id]}
   master_ips:
     value: {get_attr: [master_cluster, server_ip]}
+  log_file:
+    value: "/tmp/deploy.log"
