@@ -250,8 +250,8 @@ resources:
                 echo "kubectl_localhost: true" >> /home/k8s/.deploy/inventory/neo/group_vars/k8s-cluster.yml
                 su -c "cd /home/k8s/.deploy;export ANSIBLE_FORCE_COLOR=true;ansible-playbook -i $INV /home/k8s/.deploy/cluster.yml -b -v >> /tmp/deploy.log" - k8s
                 mkdir -p $KUBECONFIG
-                cp artifacts/admin.conf $KUBECONFIG/config
-                cp artifacts/kubectl /bin
+                cp inventory/neo/artifacts/admin.conf $KUBECONFIG/config
+                cp inventory/neo/artifacts/kubectl /bin
                 chmod +x /bin/kubectl
                 chown k8s:k8s $KUBECONFIG -R
               params:
