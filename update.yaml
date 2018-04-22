@@ -251,6 +251,7 @@ resources:
                 chown k8s:k8s $INV
                 echo "kubeconfig_localhost: true" >> /home/k8s/.deploy/inventory/neo/group_vars/k8s-cluster.yml
                 echo "kubectl_localhost: true" >> /home/k8s/.deploy/inventory/neo/group_vars/k8s-cluster.yml
+                sed -i "s|kube_network_plugin: calico|kube_network_plugin: flannel|g" /home/k8s/.deploy/inventory/neo/group_vars/k8s-cluster.yml
 
                 cat << EOF >> /home/k8s/.deploy/scale.yml
 
