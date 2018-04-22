@@ -128,8 +128,8 @@ resources:
       resource_def:
         type: master.yaml
         properties:
-          private_network: {get_resource: private_network}
-          private_subnet: {get_resource: private_subnet}
+          private_network: {get_param: private_network}
+          #private_subnet: {get_resource: private_subnet}
           #public_network: {get_param: public_network}
           secgroup_autoscale: {get_resource: secgroup_autoscale}
           install_master: {get_resource: install_master}
@@ -154,8 +154,8 @@ resources:
       resource_def:
         type: minion.yaml
         properties:
-          private_network: {get_resource: private_network}
-          private_subnet: {get_resource: private_subnet}
+          private_network: {get_param: private_network}
+          #private_subnet: {get_resource: private_subnet}
           #public_network: {get_param: public_network}
           secgroup_autoscale: {get_resource: secgroup_autoscale}
           install_minion: {get_resource: install_minion}
