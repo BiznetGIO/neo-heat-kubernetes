@@ -285,6 +285,9 @@ resources:
         port_id: {get_resource: controller_eth0}
 
 outputs:
+  user:
+    description: User Name
+    value: "k8s"
   controller:
     description: Controller IP
     value: {get_attr: [controller_floating,floating_ip_address]}
