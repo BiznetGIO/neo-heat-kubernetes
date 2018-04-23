@@ -99,6 +99,7 @@ resources:
       config: |
         #!/bin/bash
         git clone https://github.com/kubernetes-incubator/kubespray.git /home/k8s/.deploy
+        git clone https://github.com/BiznetGIO/simple-user-k8s.git /home/k8s/.user-k8s
         sudo chown k8s:k8s /home/k8s/.deploy -R
 
   # PRIVATE KEY
@@ -267,6 +268,8 @@ resources:
                 cp inventory/neo/artifacts/kubectl /bin
                 chmod +x /bin/kubectl
                 chown k8s:k8s $KUBECONFIG -R
+                cd /home/k8s/.user-k8s
+                bash run.sh
               params:
                 $node_ids: {get_attr: [node_cluster, server_id]}
                 $node_ips: {get_attr: [node_cluster, server_ip]}
