@@ -29,6 +29,7 @@ resources:
   server_name_post_fix:
     type: OS::Heat::RandomString
     properties:
+      sequence: lowercase
       length: 4
 
   kube_master:
