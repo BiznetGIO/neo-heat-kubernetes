@@ -49,6 +49,7 @@ resources:
   name_generator:
     type: OS::Heat::RandomString
     properties:
+      sequence: lowercase
       length: 4
   # USERS
   k8s_user:
