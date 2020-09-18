@@ -10,7 +10,7 @@ parameters:
     type: string
     label: Image name or ID
     description: Image to be used for server. Please use an Centos based image.
-    default: "CentOS 7 GenericCloud 1805"
+    default: "CentOS 7"
   controller_flavor:
     type: string
     label: Flavor
